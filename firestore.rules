@@ -1,0 +1,432 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidStringList(list, maxLen) {
+      return list is list && list.size() <= maxLen && (list.size() == 0 || list[0] is string);
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'ksaivyshnavi406@gmail.com')
+      );
+    }
+
+    // --- VALIDATION HELPERS ---
+
+    function isValidUserPrivate(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.appLanguage in ['en', 'te', 'hi', 'ta', 'kn', 'ml'] &&
+             data.preferredCommLanguage is string && data.preferredCommLanguage.size() >= 2 && data.preferredCommLanguage.size() <= 30 &&
+             data.privacyShowLocation is bool &&
+             data.privacyAllowInvites is bool &&
+             (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 254)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidPublicProfile(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 500)) &&
+             (!('location' in data) || data.location == null || (data.location is string && data.location.size() <= 100)) &&
+             (!('photoUri' in data) || data.photoUri == null || (data.photoUri is string && data.photoUri.size() <= 500)) &&
+             (!('spokenLanguages' in data) || isValidStringList(data.spokenLanguages, 10)) &&
+             (!('preferredLanguage' in data) || (data.preferredLanguage is string && data.preferredLanguage.size() <= 30)) &&
+             (!('availability' in data) || (data.availability is string && data.availability.size() <= 120)) &&
+             (!('experienceYears' in data) || (data.experienceYears is int && data.experienceYears >= 0 && data.experienceYears <= 80)) &&
+             (!('teachSkillNames' in data) || isValidStringList(data.teachSkillNames, 20)) &&
+             (!('learnSkillNames' in data) || isValidStringList(data.learnSkillNames, 20)) &&
+             (!('ratingAvg' in data) || (data.ratingAvg is number && data.ratingAvg >= 0 && data.ratingAvg <= 5)) &&
+             (!('reviewCount' in data) || (data.reviewCount is int && data.reviewCount >= 0)) &&
+             data.reputationPoints is int && data.reputationPoints >= 0 &&
+             (!('badges' in data) || isValidStringList(data.badges, 10)) &&
+             data.isActive is bool &&
+             (!('isOnline' in data) || data.isOnline is bool) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidUserSkill(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+             data.category in ['TECHNICAL', 'CREATIVE', 'PROFESSIONAL', 'HOBBY', 'PRACTICAL'] &&
+             data.proficiency in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] &&
+             (!('experienceYears' in data) || (data.experienceYears is int && data.experienceYears >= 0 && data.experienceYears <= 80)) &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 400)) &&
+             (!('isCustom' in data) || data.isCustom is bool) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidLearningGoal(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.skillName is string && data.skillName.size() >= 1 && data.skillName.size() <= 60 &&
+             data.currentLevel in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] &&
+             data.targetLevel in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] &&
+             data.priority in ['LOW', 'MEDIUM', 'HIGH'] &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidExchangeRequest(data) {
+      return data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80 &&
+             data.receiverId is string && data.receiverId.size() >= 1 && data.receiverId.size() <= 128 &&
+             data.receiverName is string && data.receiverName.size() >= 1 && data.receiverName.size() <= 80 &&
+             isValidStringList(data.participantIds, 2) && data.participantIds.size() == 2 &&
+             isValidStringList(data.offeredSkills, 10) &&
+             isValidStringList(data.requestedSkills, 10) &&
+             (!('message' in data) || (data.message is string && data.message.size() <= 500)) &&
+             data.status in ['PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED', 'COMPLETED'] &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidConversation(data) {
+      return isValidStringList(data.participantIds, 5) && data.participantIds.size() >= 2 &&
+             isValidStringList(data.participantNames, 5) &&
+             data.lastMessage is string && data.lastMessage.size() <= 1000 &&
+             (!('lastSenderId' in data) || (data.lastSenderId is string && data.lastSenderId.size() <= 128)) &&
+             (!('unreadCount' in data) || (data.unreadCount is int && data.unreadCount >= 0)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidChatMessage(data) {
+      return data.conversationId is string && data.conversationId.size() >= 1 && data.conversationId.size() <= 128 &&
+             data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80 &&
+             isValidStringList(data.participantIds, 5) && data.participantIds.size() >= 2 &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 1000 &&
+             data.isRead is bool &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidLearningSession(data) {
+      return data.hostId is string && data.hostId.size() >= 1 && data.hostId.size() <= 128 &&
+             data.hostName is string && data.hostName.size() >= 1 && data.hostName.size() <= 80 &&
+             data.guestId is string && data.guestId.size() >= 1 && data.guestId.size() <= 128 &&
+             data.guestName is string && data.guestName.size() >= 1 && data.guestName.size() <= 80 &&
+             isValidStringList(data.participantIds, 5) && data.participantIds.size() >= 2 &&
+             data.skillName is string && data.skillName.size() >= 1 && data.skillName.size() <= 60 &&
+             data.dateLabel is string && data.dateLabel.size() >= 1 && data.dateLabel.size() <= 40 &&
+             data.startTime is string && data.startTime.size() >= 1 && data.startTime.size() <= 20 &&
+             data.endTime is string && data.endTime.size() >= 1 && data.endTime.size() <= 20 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+             (!('roomCode' in data) || (data.roomCode is string && data.roomCode.size() <= 64)) &&
+             data.status in ['SCHEDULED', 'STARTED', 'COMPLETED', 'CANCELLED'] &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCollabProject(data) {
+      return data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+             data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 80 &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 100 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 1000 &&
+             isValidStringList(data.requiredSkills, 10) &&
+             isValidStringList(data.memberIds, 20) && data.memberIds.size() >= 1 &&
+             isValidStringList(data.memberNames, 20) &&
+             (!('deadline' in data) || (data.deadline is string && data.deadline.size() <= 40)) &&
+             data.status in ['OPEN', 'IN_PROGRESS', 'COMPLETED'] &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidUserReview(data) {
+      return data.reviewerId is string && data.reviewerId.size() >= 1 && data.reviewerId.size() <= 128 &&
+             data.reviewerName is string && data.reviewerName.size() >= 1 && data.reviewerName.size() <= 80 &&
+             data.reviewedUserId is string && data.reviewedUserId.size() >= 1 && data.reviewedUserId.size() <= 128 &&
+             data.reviewedUserName is string && data.reviewedUserName.size() >= 1 && data.reviewedUserName.size() <= 80 &&
+             (!('sessionId' in data) || (data.sessionId is string && data.sessionId.size() <= 128)) &&
+             data.rating is int && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() >= 1 && data.comment.size() <= 600 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidNotification(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.type in ['EXCHANGE_REQUEST', 'REQUEST_ACCEPTED', 'REQUEST_REJECTED', 'NEW_MESSAGE', 'SESSION_REMINDER', 'PROJECT_INVITATION', 'NEW_REVIEW', 'BADGE_EARNED'] &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.body is string && data.body.size() >= 1 && data.body.size() <= 400 &&
+             data.isRead is bool &&
+             (!('relatedId' in data) || (data.relatedId is string && data.relatedId.size() <= 128)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // --- COLLECTION RULES ---
+
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'appLanguage', 'preferredCommLanguage', 'privacyShowLocation', 'privacyAllowInvites', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'email', 'appLanguage', 'preferredCommLanguage', 'privacyShowLocation', 'privacyAllowInvites', 'createdAt', 'updatedAt']) &&
+                       isValidUserPrivate(incoming());
+
+      allow update: if isSignedIn() && isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserPrivate(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['email', 'appLanguage', 'preferredCommLanguage', 'privacyShowLocation', 'privacyAllowInvites', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    match /profiles/{profileId} {
+      allow get: if isSignedIn() && isValidId(profileId);
+      allow list: if isSignedIn() && (existing().isActive == true || existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(profileId) &&
+                       profileId == request.auth.uid &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'isActive', 'reputationPoints', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'bio', 'location', 'photoUri', 'spokenLanguages', 'preferredLanguage', 'availability', 'experienceYears', 'teachSkillNames', 'learnSkillNames', 'ratingAvg', 'reviewCount', 'reputationPoints', 'badges', 'isActive', 'isOnline', 'createdAt', 'updatedAt']) &&
+                       isValidPublicProfile(incoming());
+
+      allow update: if isSignedIn() && isValidId(profileId) &&
+                       isValidPublicProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['isActive', 'reputationPoints', 'badges', 'updatedAt'])) ||
+                         (profileId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'bio', 'location', 'photoUri', 'spokenLanguages', 'preferredLanguage', 'availability', 'experienceYears', 'teachSkillNames', 'learnSkillNames', 'reputationPoints', 'badges', 'isOnline', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(profileId) && (profileId == request.auth.uid || isAdmin());
+    }
+
+    match /user_skills/{skillId} {
+      allow get: if isSignedIn() && isValidId(skillId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(skillId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'name', 'category', 'proficiency', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'name', 'category', 'proficiency', 'experienceYears', 'description', 'isCustom', 'createdAt', 'updatedAt']) &&
+                       isValidUserSkill(incoming());
+
+      allow update: if isSignedIn() && isValidId(skillId) &&
+                       existing().userId == request.auth.uid &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserSkill(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'proficiency', 'experienceYears', 'description', 'isCustom', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(skillId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /learning_skills/{goalId} {
+      allow get: if isSignedIn() && isValidId(goalId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() && isValidId(goalId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'skillName', 'currentLevel', 'targetLevel', 'priority', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'skillName', 'currentLevel', 'targetLevel', 'priority', 'createdAt', 'updatedAt']) &&
+                       isValidLearningGoal(incoming());
+
+      allow update: if isSignedIn() && isValidId(goalId) &&
+                       existing().userId == request.auth.uid &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidLearningGoal(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['skillName', 'currentLevel', 'targetLevel', 'priority', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(goalId) && existing().userId == request.auth.uid;
+    }
+
+    match /exchange_requests/{requestId} {
+      allow get: if isSignedIn() && isValidId(requestId) && (request.auth.uid in existing().participantIds || isAdmin());
+      allow list: if isSignedIn() && (request.auth.uid in existing().participantIds || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(requestId) &&
+                       incoming().senderId == request.auth.uid &&
+                       request.auth.uid in incoming().participantIds &&
+                       incoming().status == 'PENDING' &&
+                       incoming().keys().hasAll(['senderId', 'senderName', 'receiverId', 'receiverName', 'participantIds', 'offeredSkills', 'requestedSkills', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['senderId', 'senderName', 'receiverId', 'receiverName', 'participantIds', 'offeredSkills', 'requestedSkills', 'message', 'status', 'createdAt', 'updatedAt']) &&
+                       isValidExchangeRequest(incoming());
+
+      allow update: if isSignedIn() && isValidId(requestId) &&
+                       isValidExchangeRequest(incoming()) &&
+                       incoming().senderId == existing().senderId &&
+                       incoming().receiverId == existing().receiverId &&
+                       incoming().participantIds == existing().participantIds &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isAdmin() || (
+                         request.auth.uid in existing().participantIds &&
+                         existing().status in ['PENDING', 'ACCEPTED'] &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+                       ));
+
+      allow delete: if isSignedIn() && isValidId(requestId) && (existing().senderId == request.auth.uid || isAdmin());
+    }
+
+    match /conversations/{conversationId} {
+      allow get: if isSignedIn() && isValidId(conversationId) && (
+        (resource == null && conversationId.matches('.*' + request.auth.uid + '.*')) ||
+        (resource != null && request.auth.uid in existing().participantIds)
+      );
+      allow list: if isSignedIn() && request.auth.uid in existing().participantIds;
+
+      allow create: if isSignedIn() && isValidId(conversationId) &&
+                       request.auth.uid in incoming().participantIds &&
+                       incoming().keys().hasAll(['participantIds', 'participantNames', 'lastMessage', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['participantIds', 'participantNames', 'lastMessage', 'lastSenderId', 'unreadCount', 'createdAt', 'updatedAt']) &&
+                       isValidConversation(incoming());
+
+      allow update: if isSignedIn() && isValidId(conversationId) &&
+                       request.auth.uid in existing().participantIds &&
+                       incoming().participantIds == existing().participantIds &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidConversation(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastSenderId', 'unreadCount', 'updatedAt']);
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) && request.auth.uid in existing().participantIds;
+        allow list: if isSignedIn() && isValidId(conversationId) && request.auth.uid in existing().participantIds;
+
+        allow create: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) &&
+                         incoming().conversationId == conversationId &&
+                         incoming().senderId == request.auth.uid &&
+                         request.auth.uid in incoming().participantIds &&
+                         incoming().keys().hasAll(['conversationId', 'senderId', 'senderName', 'participantIds', 'text', 'isRead', 'createdAt']) &&
+                         incoming().keys().hasOnly(['conversationId', 'senderId', 'senderName', 'participantIds', 'text', 'isRead', 'createdAt']) &&
+                         isValidChatMessage(incoming()) &&
+                         exists(/databases/$(database)/documents/conversations/$(conversationId));
+
+        allow update: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) &&
+                         request.auth.uid in existing().participantIds &&
+                         incoming().senderId == existing().senderId &&
+                         incoming().conversationId == existing().conversationId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidChatMessage(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+
+        allow delete: if false;
+      }
+    }
+
+    match /sessions/{sessionId} {
+      allow get: if isSignedIn() && isValidId(sessionId) && request.auth.uid in existing().participantIds;
+      allow list: if isSignedIn() && request.auth.uid in existing().participantIds;
+
+      allow create: if isSignedIn() && isValidId(sessionId) &&
+                       incoming().hostId == request.auth.uid &&
+                       request.auth.uid in incoming().participantIds &&
+                       incoming().status == 'SCHEDULED' &&
+                       incoming().keys().hasAll(['hostId', 'hostName', 'guestId', 'guestName', 'participantIds', 'skillName', 'dateLabel', 'startTime', 'endTime', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['hostId', 'hostName', 'guestId', 'guestName', 'participantIds', 'skillName', 'dateLabel', 'startTime', 'endTime', 'description', 'roomCode', 'status', 'createdAt', 'updatedAt']) &&
+                       isValidLearningSession(incoming());
+
+      allow update: if isSignedIn() && isValidId(sessionId) &&
+                       request.auth.uid in existing().participantIds &&
+                       incoming().hostId == existing().hostId &&
+                       incoming().guestId == existing().guestId &&
+                       incoming().participantIds == existing().participantIds &&
+                       incoming().createdAt == existing().createdAt &&
+                       existing().status in ['SCHEDULED', 'STARTED'] &&
+                       isValidLearningSession(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['dateLabel', 'startTime', 'endTime', 'description', 'status', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(sessionId) && existing().hostId == request.auth.uid;
+    }
+
+    match /projects/{projectId} {
+      allow get: if isSignedIn() && isValidId(projectId) && (existing().status == 'OPEN' || request.auth.uid in existing().memberIds || existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().status == 'OPEN' || request.auth.uid in existing().memberIds || existing().ownerId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(projectId) &&
+                       incoming().ownerId == request.auth.uid &&
+                       request.auth.uid in incoming().memberIds &&
+                       incoming().keys().hasAll(['ownerId', 'ownerName', 'title', 'description', 'requiredSkills', 'memberIds', 'memberNames', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['ownerId', 'ownerName', 'title', 'description', 'requiredSkills', 'memberIds', 'memberNames', 'deadline', 'status', 'createdAt', 'updatedAt']) &&
+                       isValidCollabProject(incoming());
+
+      allow update: if isSignedIn() && isValidId(projectId) &&
+                       isValidCollabProject(incoming()) &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         (existing().status != 'COMPLETED' && existing().ownerId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'requiredSkills', 'memberIds', 'memberNames', 'deadline', 'status', 'updatedAt'])) ||
+                         (existing().status == 'OPEN' && incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'memberNames', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(projectId) && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /reviews/{reviewId} {
+      allow get: if isSignedIn() && isValidId(reviewId) && (existing().reviewerId == request.auth.uid || existing().reviewedUserId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().reviewerId == request.auth.uid || existing().reviewedUserId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(reviewId) &&
+                       incoming().reviewerId == request.auth.uid &&
+                       incoming().reviewerId != incoming().reviewedUserId &&
+                       incoming().keys().hasAll(['reviewerId', 'reviewerName', 'reviewedUserId', 'reviewedUserName', 'rating', 'comment', 'createdAt']) &&
+                       incoming().keys().hasOnly(['reviewerId', 'reviewerName', 'reviewedUserId', 'reviewedUserName', 'sessionId', 'rating', 'comment', 'createdAt']) &&
+                       isValidUserReview(incoming());
+
+      allow update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && isValidId(notificationId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() && isValidId(notificationId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'type', 'title', 'body', 'isRead', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'type', 'title', 'body', 'isRead', 'relatedId', 'createdAt', 'updatedAt']) &&
+                       isValidNotification(incoming());
+
+      allow update: if isSignedIn() && isValidId(notificationId) &&
+                       existing().userId == request.auth.uid &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidNotification(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(notificationId) && existing().userId == request.auth.uid;
+    }
+  }
+}

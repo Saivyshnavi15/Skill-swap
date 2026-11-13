@@ -1,0 +1,247 @@
+{
+  "entities": {
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Private user account metadata and PII isolated to the owner.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated Firebase UID." },
+        "email": { "type": "string", "description": "User email address (PII)." },
+        "appLanguage": { "type": "string", "description": "Selected UI language code (en, te, hi, ta, kn, ml)." },
+        "preferredCommLanguage": { "type": "string", "description": "Preferred exchange communication language." },
+        "privacyShowLocation": { "type": "boolean", "description": "Whether location is visible on public profile." },
+        "privacyAllowInvites": { "type": "boolean", "description": "Whether project/exchange invites are enabled." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "appLanguage", "preferredCommLanguage", "privacyShowLocation", "privacyAllowInvites", "createdAt", "updatedAt"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Discoverable public skill exchange profile with zero PII.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase UID." },
+        "displayName": { "type": "string", "description": "Public display name." },
+        "bio": { "type": "string", "description": "Short learner/mentor bio." },
+        "location": { "type": "string", "description": "City or region." },
+        "photoUri": { "type": "string", "description": "Optional avatar identifier or URI." },
+        "spokenLanguages": { "type": "array", "description": "Spoken language names (max 10)." },
+        "preferredLanguage": { "type": "string", "description": "Preferred communication language." },
+        "availability": { "type": "string", "description": "Weekly availability schedule summary." },
+        "experienceYears": { "type": "integer", "description": "Years of experience." },
+        "teachSkillNames": { "type": "array", "description": "Skill names user can teach (max 20)." },
+        "learnSkillNames": { "type": "array", "description": "Skill names user wants to learn (max 20)." },
+        "ratingAvg": { "type": "number", "description": "Average community rating (0.0 to 5.0)." },
+        "reviewCount": { "type": "integer", "description": "Total reviews received." },
+        "reputationPoints": { "type": "integer", "description": "Earned community reputation points." },
+        "badges": { "type": "array", "description": "Earned badge names (max 10)." },
+        "isActive": { "type": "boolean", "description": "Whether profile is active in discovery." },
+        "isOnline": { "type": "boolean", "description": "Online presence indicator." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "displayName", "isActive", "reputationPoints", "createdAt", "updatedAt"]
+    },
+    "UserSkill": {
+      "title": "UserSkill",
+      "description": "A skill a user can teach.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase UID." },
+        "name": { "type": "string", "description": "Skill name." },
+        "category": { "type": "string", "enum": ["TECHNICAL", "CREATIVE", "PROFESSIONAL", "HOBBY", "PRACTICAL"] },
+        "proficiency": { "type": "string", "enum": ["BEGINNER", "INTERMEDIATE", "ADVANCED", "EXPERT"] },
+        "experienceYears": { "type": "integer", "description": "Years of experience." },
+        "description": { "type": "string", "description": "What the user can teach." },
+        "isCustom": { "type": "boolean", "description": "Whether custom-created skill." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "category", "proficiency", "createdAt", "updatedAt"]
+    },
+    "LearningGoal": {
+      "title": "LearningGoal",
+      "description": "A skill a user wants to learn.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase UID." },
+        "skillName": { "type": "string", "description": "Desired skill name." },
+        "currentLevel": { "type": "string", "enum": ["BEGINNER", "INTERMEDIATE", "ADVANCED", "EXPERT"] },
+        "targetLevel": { "type": "string", "enum": ["BEGINNER", "INTERMEDIATE", "ADVANCED", "EXPERT"] },
+        "priority": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "skillName", "currentLevel", "targetLevel", "priority", "createdAt", "updatedAt"]
+    },
+    "ExchangeRequest": {
+      "title": "ExchangeRequest",
+      "description": "Peer-to-peer skill exchange request.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "receiverName": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "offeredSkills": { "type": "array" },
+        "requestedSkills": { "type": "array" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "ACCEPTED", "REJECTED", "CANCELLED", "COMPLETED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "senderName", "receiverId", "receiverName", "participantIds", "offeredSkills", "requestedSkills", "status", "createdAt", "updatedAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Chat thread between exchange participants.",
+      "type": "object",
+      "properties": {
+        "participantIds": { "type": "array" },
+        "participantNames": { "type": "array" },
+        "lastMessage": { "type": "string" },
+        "lastSenderId": { "type": "string" },
+        "unreadCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participantIds", "participantNames", "lastMessage", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Message inside a conversation.",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "text": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["conversationId", "senderId", "senderName", "participantIds", "text", "isRead", "createdAt"]
+    },
+    "LearningSession": {
+      "title": "LearningSession",
+      "description": "Scheduled learning or WebRTC video exchange session.",
+      "type": "object",
+      "properties": {
+        "hostId": { "type": "string" },
+        "hostName": { "type": "string" },
+        "guestId": { "type": "string" },
+        "guestName": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "skillName": { "type": "string" },
+        "dateLabel": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "description": { "type": "string" },
+        "roomCode": { "type": "string" },
+        "status": { "type": "string", "enum": ["SCHEDULED", "STARTED", "COMPLETED", "CANCELLED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["hostId", "hostName", "guestId", "guestName", "participantIds", "skillName", "dateLabel", "startTime", "endTime", "status", "createdAt", "updatedAt"]
+    },
+    "CollabProject": {
+      "title": "CollabProject",
+      "description": "Community collaboration project.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "requiredSkills": { "type": "array" },
+        "memberIds": { "type": "array" },
+        "memberNames": { "type": "array" },
+        "deadline": { "type": "string" },
+        "status": { "type": "string", "enum": ["OPEN", "IN_PROGRESS", "COMPLETED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "ownerName", "title", "description", "requiredSkills", "memberIds", "memberNames", "status", "createdAt", "updatedAt"]
+    },
+    "UserReview": {
+      "title": "UserReview",
+      "description": "Immutable peer rating and review after a completed exchange or session.",
+      "type": "object",
+      "properties": {
+        "reviewerId": { "type": "string" },
+        "reviewerName": { "type": "string" },
+        "reviewedUserId": { "type": "string" },
+        "reviewedUserName": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "rating": { "type": "integer" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reviewerId", "reviewerName", "reviewedUserId", "reviewedUserName", "rating", "comment", "createdAt"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "User-scoped activity notification.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["EXCHANGE_REQUEST", "REQUEST_ACCEPTED", "REQUEST_REJECTED", "NEW_MESSAGE", "SESSION_REMINDER", "PROJECT_INVITATION", "NEW_REVIEW", "BADGE_EARNED"] },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "relatedId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "title", "body", "isRead", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Private user settings and PII isolated by UID."
+    },
+    "/profiles/{profileId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Public discoverable skill profiles."
+    },
+    "/user_skills/{skillId}": {
+      "schema": { "$ref": "#/entities/UserSkill" },
+      "description": "User-authored teaching skills."
+    },
+    "/learning_skills/{goalId}": {
+      "schema": { "$ref": "#/entities/LearningGoal" },
+      "description": "User-authored learning goals."
+    },
+    "/exchange_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/ExchangeRequest" },
+      "description": "Peer skill exchange requests."
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Participant-scoped chat conversations."
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Messages within a conversation."
+    },
+    "/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/LearningSession" },
+      "description": "Scheduled learning and WebRTC video sessions."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/CollabProject" },
+      "description": "Community collaboration projects."
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/UserReview" },
+      "description": "Peer ratings and reviews."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/AppNotification" },
+      "description": "User notifications."
+    }
+  }
+}
